@@ -49,7 +49,7 @@
 %endif
 
 Name:           osc
-Version:        1.8.3
+Version:        1.9.2
 Release:        0
 Summary:        Command-line client for the Open Build Service
 License:        GPL-2.0-or-later
@@ -95,6 +95,9 @@ Recommends:     %{use_python_pkg}-distro
 # needed for storing credentials in kwallet/gnome-keyring
 Recommends:     %{use_python_pkg}-keyring
 Recommends:     %{use_python_pkg}-keyring-keyutils
+
+# needed for opening control.tar.zst in debquery
+Recommends:     %{use_python_pkg}-zstandard
 
 Recommends:     %{obs_build_pkg}
 Recommends:     ca-certificates
@@ -192,7 +195,7 @@ install -Dm0644 oscrc.5 %{buildroot}%{_mandir}/man5/oscrc.5
 %python3_fix_shebang
 
 %check
-%{use_python} setup.py test
+%{use_python} -m unittest
 
 %files
 %defattr(-,root,root,-)

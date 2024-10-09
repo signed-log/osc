@@ -1,3 +1,39 @@
+- 1.9.2
+  - Command-line:
+    - Fix 'resolved' command to skip subdirectories in package checkouts
+    - Fix 'comment' command to resolve project name
+    - Implement meter.SimpleTextMeter that prints what's being downloaded
+  - Connection:
+    - Use configured 'http_headers' in HTTP requests
+  - Library:
+    - Fix storing _buildinfo and _buildconfig files in .osc rather than among the source files
+    - Use findtext() instead of find().text
+  - Spec:
+    - Recommend python3-zstandard to support opening control.tar.zst
+
+- 1.9.1
+  - Command-line:
+    - Add 'createrequest release' subcommand
+    - Change 'review list' command to omit requests with 'declined' state
+    - Fix `osc build --local-package`
+    - Fix typos
+  - Library:
+    - Fix extraction of the 'ar' archives when they don't contain header with long filenames
+    - Fix iterating through arch_list in core.get_repos_of_project()
+    - Check for None & len() of ET.Element instead of bool() in PackageBase.get_meta_value()
+  - Spec:
+    - Replace 'setup.py test' that was removed in setuptools 72 with 'python3 -m unittest'
+
+- 1.9.0
+  - Security:
+    - Fix possibility to overwrite special files in .osc (CVE-2024-22034 boo#1225911)
+      Source files are now stored in the 'sources' subdirectory which prevents
+      name collisons. This requires changing version of '.osc' store to 2.0.
+  - Command-line:
+    - Introduce build --checks parameter
+  - Library:
+    - OscConfigParser: Remove automatic __name__ option
+
 - 1.8.3
   - Command-line:
     - Change 'repairwc' command to always run all repair steps

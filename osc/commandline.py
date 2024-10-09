@@ -2632,6 +2632,25 @@ Please submit there instead, or use --nodevelproject to force direct submission.
 
         return actionxml
 
+    def _release_request(self, args, opts):
+        if len(args) < 3 or len(args) > 5:
+            raise oscerr.WrongArgs('Wrong number of arguments for release' + str(len(args)))
+
+        project = self._process_project_name(args[0])
+        package = args[1]
+        target_project = args[2]
+        source_repository = target_repository = ""
+        if len(args) == 5:
+            source_repository = """ repository="%s" """ % args[3]
+            target_repository = """ repository="%s" """ % args[4]
+        elif len(args) == 4:
+            target_repository = """ repository="%s" """ % args[3]
+
+        actionxml = """ <action type="release"> <source project="%s" package="%s" %s/> <target project="%s" %s/> </action> """ % \
+            (project, package, source_repository, target_project, target_repository)
+
+        return actionxml
+
     def _add_me(self, args, opts):
         if len(args) > 3:
             raise oscerr.WrongArgs('Too many arguments.')
@@ -2754,7 +2773,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
     @cmdln.alias("creq")
     def do_createrequest(self, subcmd, opts, *args):
         """
-        Create multiple requests with a single command
+        Create a request with multiple actions
 
         usage:
             osc creq [OPTIONS] [
@@ -2765,9 +2784,10 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                 -a add_group GROUP ROLE PROJECT [PACKAGE]
                 -a add_role USER ROLE PROJECT [PACKAGE]
                 -a set_bugowner USER PROJECT [PACKAGE]
+                -a release PROJECT PACKAGE TARGET_PROJECT [[SOURCE_REPOSITORY] TARGET_REPOSITORY]
                 ]
 
-            Option -m works for all types of request, the rest work only for submit.
+            Option -m works for all types of request actions, the rest work only for submit.
 
         Example:
             osc creq -a submit -a delete home:someone:branches:openSUSE:Tools -a change_devel openSUSE:Tools osc home:someone:branches:openSUSE:Tools -m ok
@@ -2804,6 +2824,8 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                 actionsxml += self._delete_request(args, opts)
             elif action == 'change_devel':
                 actionsxml += self._changedevel_request(args, opts)
+            elif action == 'release':
+                actionsxml += self._release_request(args, opts)
             elif action == 'add_me':
                 actionsxml += self._add_me(args, opts)
             elif action == 'add_group':
@@ -2827,6 +2849,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
 
         root = ET.parse(f).getroot()
         rid = root.get('id')
+        print(f"Request {rid} created")
         for srid in supersede:
             change_request_state(apiurl, srid, 'superseded',
                                  f'superseded by {rid}', rid)
@@ -3322,7 +3345,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                 if subcmd == 'review':
                     # FIXME: do the review list for the user and for all groups he belong to
                     results = get_review_list(apiurl, project, package, who, opts.group, opts.project, opts.package, state_list,
-                                              opts.type, req_states=("new", "review", "declined"))
+                                              opts.type, req_states=("new", "review"))
                 else:
                     if opts.involved_projects:
                         who = who or conf.get_apiurl_usr(apiurl)
@@ -3676,7 +3699,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
         """
         apiurl = self.get_api_url()
 
-        # assume we're in a working copy if no args were specfied
+        # assume we're in a working copy if no args were specified
         update_working_copy = not args
 
         args = list(args)
@@ -3928,7 +3951,8 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                      revision=rev,
                      comment=comment,
                      keep_link=opts.keep_link)
-        print(decode_it(r))
+        if r is not None:
+            print(decode_it(r))
 
     @cmdln.option('-a', '--arch', metavar='ARCH',
                         help='Release only binaries from the specified architecture')
@@ -4379,7 +4403,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
         With getpac or bco, the branched package will come from one of
             %(getpac_default_project)s
         (list of projects from oscrc:getpac_default_project)
-        if nothing else is specfied on the command line.
+        if nothing else is specified on the command line.
 
         In case of branch errors, where the source has currently merge
         conflicts use --linkrev=base option.
@@ -5581,7 +5605,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
     @cmdln.option('-F', '--file', metavar='FILE',
                   help='read log message from FILE, \'-\' denotes standard input.')
     @cmdln.option('-f', '--force', default=False, action="store_true",
-                  help='Allow empty commit with no changes. When commiting a project, allow removing packages even if other packages depend on them.')
+                  help='Allow empty commit with no changes. When committing a project, allow removing packages even if other packages depend on them.')
     @cmdln.option("--skip-local-service-run", "--noservice", "--no-service", default=False, action="store_true",
                   help="Skip run of local source services as specified in _service file.")
     def do_commit(self, subcmd, opts, *args):
@@ -5972,7 +5996,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
             self.argparse_error("Incorrect number of arguments.")
 
         args = parseargs(args)
-        pacs = Package.from_paths(args)
+        pacs = Package.from_paths(args, skip_dirs=True)
 
         for p in pacs:
             for filename in p.todo:
@@ -6471,7 +6495,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                 cfg = f
         root = ET.parse(cfg).getroot()
         repo = root.get("repository")
-        arch = root.find("arch").text
+        arch = root.findtext("arch")
         return repo, arch
 
     @cmdln.alias('lbl')
@@ -7011,8 +7035,9 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                 if (arg.endswith('.spec') or arg.endswith('.dsc') or
                     arg.endswith('.kiwi') or arg.endswith('.livebuild') or
                     arg.endswith('flatpak.yaml') or arg.endswith('flatpak.yml') or
-                    arg.endswith('flatpak.json') or
-                    arg in ('PKGBUILD', 'build.collax', 'Chart.yaml', 'Dockerfile',
+                    arg.endswith('flatpak.json') or arg.startswith('Dockerfile.') or
+                    arg.startswith('Containerfile.') or
+                    arg in ('PKGBUILD', 'build.collax', 'Chart.yaml', 'Containerfile', 'Dockerfile',
                             'fissile.yml', 'appimage.yml', '_preinstallimage')):
                     arg_descr = arg
                 else:
@@ -7081,6 +7106,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
         # but be a bit more readable :)
         descr = glob.glob('*.spec') + glob.glob('*.dsc') + glob.glob('*.kiwi') + glob.glob('*.livebuild') + \
             glob.glob('PKGBUILD') + glob.glob('build.collax') + glob.glob('Dockerfile') + \
+            glob.glob('Dockerfile.*') + glob.glob('Containerfile') + glob.glob('Containerfile.*') + \
             glob.glob('fissile.yml') + glob.glob('appimage.yml') + glob.glob('Chart.yaml') + \
             glob.glob('*flatpak.yaml') + glob.glob('*flatpak.yml') + glob.glob('*flatpak.json') + \
             glob.glob('*.productcompose')
@@ -7320,7 +7346,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
             osc build [OPTS] --alternative-project openSUSE:10.3 standard i586 BUILD_DESCR
 
         usage:
-            osc build [OPTS]                      # will try to guess a build environement
+            osc build [OPTS]                      # will try to guess a build environment
             osc build [OPTS] REPOSITORY ARCH BUILD_DESCR
             osc build [OPTS] REPOSITORY ARCH
             osc build [OPTS] REPOSITORY (ARCH = hostarch, BUILD_DESCR is detected automatically)
@@ -7370,22 +7396,28 @@ Please submit there instead, or use --nodevelproject to force direct submission.
         if len(args) > 3:
             raise oscerr.WrongArgs('Too many arguments')
 
-        store = osc_store.get_store(Path.cwd(), print_warnings=True)
-        store.assert_is_package()
+        if not opts.local_package:
+            store = osc_store.get_store(Path.cwd(), print_warnings=True)
+            store.assert_is_package()
 
-        try:
-            if opts.alternative_project and opts.alternative_project == store.project:
-                opts.alternative_project = None
-        except RuntimeError:
+            try:
+                if opts.alternative_project and opts.alternative_project == store.project:
+                    opts.alternative_project = None
+            except RuntimeError:
             # ignore the following exception: Couldn't map git branch '<BRANCH>' to a project
-            pass
+                pass
+        else:
+            try:
+                store = osc_store.get_store(os.path.dirname(Path.cwd()), print_warnings=True)
+            except oscerr.NoWorkingCopy:
+                store = None
 
         # HACK: avoid calling some underlying store_*() functions from parse_repoarchdescr() method
         # We'll fix parse_repoarchdescr() later because it requires a larger change
         if not opts.alternative_project and isinstance(store, git_scm.GitStore):
             opts.alternative_project = store.project
 
-        if len(args) == 0 and store.is_package and store.last_buildroot:
+        if len(args) == 0 and store and store.is_package and store.last_buildroot:
             # build env not specified, just read from last build attempt
             args = [store.last_buildroot[0], store.last_buildroot[1]]
             if not opts.vm_type:
@@ -9535,14 +9567,12 @@ Please submit there instead, or use --nodevelproject to force direct submission.
         store_write_string(destdir, '_linkrepair', '')
         pac = Package(destdir)
 
-        storedir = os.path.join(destdir, store)
-
         for name in sorted(entries.keys()):
             md5_old = entries_old.get(name, '')
             md5_new = entries_new.get(name, '')
             md5_oldpatched = entries_oldpatched.get(name, '')
             if md5_new != '':
-                self.download(name, md5_new, dir_new, os.path.join(storedir, name))
+                self.download(name, md5_new, dir_new, pac.store.sources_get_path(name))
             if md5_old == md5_new:
                 if md5_oldpatched == '':
                     pac.put_on_deletelist(name)
@@ -9554,17 +9584,17 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                 if md5_new == '':
                     continue
                 print(statfrmt('U', name))
-                shutil.copy2(os.path.join(storedir, name), os.path.join(destdir, name))
+                shutil.copy2(pac.store.sources_get_path(name), os.path.join(destdir, name))
                 continue
             if md5_new == md5_oldpatched:
                 if md5_new == '':
                     continue
                 print(statfrmt('G', name))
-                shutil.copy2(os.path.join(storedir, name), os.path.join(destdir, name))
+                shutil.copy2(pac.store.sources_get_path(name), os.path.join(destdir, name))
                 continue
             self.download(name, md5_oldpatched, dir_oldpatched, os.path.join(destdir, name + '.mine'))
             if md5_new != '':
-                shutil.copy2(os.path.join(storedir, name), os.path.join(destdir, name + '.new'))
+                shutil.copy2(pac.store.sources_get_path(name), os.path.join(destdir, name + '.new'))
             else:
                 self.download(name, md5_new, dir_new, os.path.join(destdir, name + '.new'))
             self.download(name, md5_old, dir_old, os.path.join(destdir, name + '.old'))
@@ -10229,8 +10259,12 @@ Please submit there instead, or use --nodevelproject to force direct submission.
             comment = opts.comment
 
         if args[0] == 'list':
+            if args[1] == 'package' or args[1] == 'project':
+                args[2] = self._process_project_name(args[2])
             print_comments(apiurl, args[1], *args[2:])
         elif args[0] == 'create':
+            if args[1] == 'package' or args[1] == 'project':
+                args[2] = self._process_project_name(args[2])
             result = create_comment(apiurl, args[1], comment,
                                     *args[2:], parent=opts.parent)
             print(result)

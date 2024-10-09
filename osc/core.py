@@ -381,10 +381,7 @@ class ReviewState(AbstractState):
         self.by_package = review_node.get('by_package')
         self.who = review_node.get('who')
         self.when = review_node.get('when')
-        self.comment = ''
-        if not review_node.find('comment') is None and \
-                review_node.find('comment').text:
-            self.comment = review_node.find('comment').text.strip()
+        self.comment = review_node.findtext("comment", default="").strip()
 
     def __repr__(self):
         result = super().__repr__()
@@ -421,17 +418,15 @@ class RequestHistory(AbstractState):
         super().__init__(history_node.tag)
         self.who = history_node.get('who')
         self.when = history_node.get('when')
-        if not history_node.find('description') is None and \
-                history_node.find('description').text:
+        if history_node.find('description') is not None:
             # OBS 2.6
-            self.description = history_node.find('description').text.strip()
+            self.description = history_node.findtext("description").strip()
         else:
             # OBS 2.5 and before
-            self.description = history_node.get('name')
+            self.description = history_node.get("name")
         self.comment = ''
-        if not history_node.find('comment') is None and \
-                history_node.find('comment').text:
-            self.comment = history_node.find('comment').text.strip()
+        if history_node.find("comment") is not None:
+            self.comment = history_node.findtext("comment").strip()
         self.name = self._parse_name(history_node)
 
     def _parse_name(self, history_node):
@@ -471,9 +466,8 @@ class RequestState(AbstractState):
             # OBS 2.6 has it always, before it did not exist
             self.description = state_node.get('description')
         self.comment = ''
-        if not state_node.find('comment') is None and \
-                state_node.find('comment').text:
-            self.comment = state_node.find('comment').text.strip()
+        if state_node.find('comment') is not None:
+            self.comment = state_node.findtext("comment").strip()
 
     def get_node_attrs(self):
         return ('name', 'who', 'when', 'approver')
@@ -744,14 +738,14 @@ class Request:
             self.reviews.append(ReviewState(review))
         for history_element in root.findall('history'):
             self.statehistory.append(RequestHistory(history_element))
-        if not root.find('priority') is None and root.find('priority').text:
-            self.priority = root.find('priority').text.strip()
-        if not root.find('accept_at') is None and root.find('accept_at').text:
-            self.accept_at = root.find('accept_at').text.strip()
-        if not root.find('title') is None:
-            self.title = root.find('title').text.strip()
-        if not root.find('description') is None and root.find('description').text:
-            self.description = root.find('description').text.strip()
+        if root.findtext("priority"):
+            self.priority = root.findtext("priority").strip()
+        if root.findtext("accept_at"):
+            self.accept_at = root.findtext("accept_at").strip()
+        if root.findtext("title"):
+            self.title = root.findtext("title").strip()
+        if root.findtext("description"):
+            self.description = root.findtext("description").strip()
 
     def add_action(self, type, **kwargs):
         """add a new action to the request"""
@@ -2820,7 +2814,7 @@ def get_source_file_diff(dir, filename, rev, oldfilename=None, olddir=None, orig
         oldfilename = filename
 
     if not olddir:
-        olddir = os.path.join(dir, store)
+        olddir = os.path.join(dir, store, "sources")
 
     if not origfilename:
         origfilename = filename
@@ -3030,10 +3024,10 @@ def submit_action_diff(apiurl: str, action: Action):
                 if e.code != 404:
                     raise e
                 root = ET.fromstring(e.read())
-                return b'error: \'%s\' does not exist' % root.find('summary').text.encode()
+                return b'error: \'%s\' does not exist' % root.findtext("summary").encode()
         elif e.code == 404:
             root = ET.fromstring(e.read())
-            return b'error: \'%s\' does not exist' % root.find('summary').text.encode()
+            return b'error: \'%s\' does not exist' % root.findtext("summary").encode()
         raise e
 
 
@@ -3206,7 +3200,7 @@ def checkout_package(
 
 def replace_pkg_meta(
     pkgmeta, new_name: str, new_prj: str, keep_maintainers=False, dst_userid=None, keep_develproject=False,
-    keep_lock: bool = False,
+    keep_lock: bool = False, keep_scmsync: bool = True,
 ):
     """
     update pkgmeta with new new_name and new_prj and set calling user as the
@@ -3229,6 +3223,9 @@ def replace_pkg_meta(
             root.remove(dp)
     if not keep_lock:
         for node in root.findall("lock"):
+            root.remove(node)
+    if not keep_scmsync:
+        for node in root.findall("scmsync"):
             root.remove(node)
     return ET.tostring(root, encoding=ET_ENCODING)
 
@@ -3732,12 +3729,13 @@ def copy_pac(
         if not any([expand, revision]):
             raise oscerr.OscValueError("Cannot copy package. Source and target are the same.")
 
+    meta = None
     if not (src_apiurl == dst_apiurl and src_project == dst_project
             and src_package == dst_package):
         src_meta = show_package_meta(src_apiurl, src_project, src_package)
         dst_userid = conf.get_apiurl_usr(dst_apiurl)
-        src_meta = replace_pkg_meta(src_meta, dst_package, dst_project, keep_maintainers,
-                                    dst_userid, keep_develproject)
+        meta = replace_pkg_meta(src_meta, dst_package, dst_project, keep_maintainers,
+                                dst_userid, keep_develproject, keep_scmsync=(not client_side_copy))
 
         url = make_meta_url('pkg', (dst_project, dst_package), dst_apiurl)
         found = None
@@ -3748,7 +3746,15 @@ def copy_pac(
         if force_meta_update or not found:
             print('Sending meta data...')
             u = makeurl(dst_apiurl, ['source', dst_project, dst_package, '_meta'])
-            http_PUT(u, data=src_meta)
+            http_PUT(u, data=meta)
+
+    if meta is None:
+        meta = show_files_meta(dst_apiurl, dst_project, dst_package)
+
+    root = ET.fromstring(meta)
+    if root.find("scmsync") is not None:
+        print("Note: package source is managed via SCM")
+        return
 
     print('Copying files...')
     if not client_side_copy:
@@ -3975,7 +3981,7 @@ def get_repos_of_project(apiurl: str, prj: str):
 
     project_obj = obs_api.Project.from_api(apiurl, prj)
     for repo in project_obj.repository_list or []:
-        for arch in repo.arch_list:
+        for arch in repo.arch_list or []:
             yield Repo(repo.name, arch)
 
 
@@ -4675,7 +4681,7 @@ def get_source_rev(apiurl: str, project: str, package: str, revision=None):
         # remember the newest one.
         if not ent:
             ent = new
-        elif ent.find('time').text < new.find('time').text:
+        elif ent.findtext("time") < new.findtext("time"):
             ent = new
     if not ent:
         return {'version': None, 'error': 'empty revisionlist: no such package?'}

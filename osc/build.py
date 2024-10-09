@@ -91,7 +91,7 @@ class Buildinfo:
 
         if root.find('error') is not None:
             sys.stderr.write('buildinfo is broken... it says:\n')
-            error = root.find('error').text
+            error = root.findtext("error")
             if error.startswith('unresolvable: '):
                 sys.stderr.write('unresolvable: ')
                 sys.stderr.write('\n     '.join(error[14:].split(',')))
@@ -125,20 +125,10 @@ class Buildinfo:
         # buildarch: The architecture of the build result      (host arch in GNU definition)
         # hostarch:  The architecture of the build environment (build arch in GNU defintion)
         # crossarch: Same as hostarch, but indicating that a sysroot with an incompatible architecture exists
-        self.buildarch = root.find('arch').text
-        if root.find('crossarch') is not None:
-            self.crossarch = root.find('crossarch').text
-        else:
-            self.crossarch = None
-        if root.find('hostarch') is not None:
-            self.hostarch = root.find('hostarch').text
-        else:
-            self.hostarch = None
-
-        if root.find('release') is not None:
-            self.release = root.find('release').text
-        else:
-            self.release = None
+        self.buildarch = root.findtext("arch")
+        self.crossarch = root.findtext("crossarch")
+        self.hostarch = root.findtext("hostarch")
+        self.release = root.findtext("release")
         if conf.config['api_host_options'][apiurl]['downloadurl']:
             # Formerly, this was set to False, but we have to set it to True, because a large
             # number of repos in OBS are misconfigured and don't actually have repos setup - they
@@ -154,7 +144,7 @@ class Buildinfo:
         self.debuginfo = 0
         if root.find('debuginfo') is not None:
             try:
-                self.debuginfo = int(root.find('debuginfo').text)
+                self.debuginfo = int(root.findtext("debuginfo"))
             except ValueError:
                 pass
 
@@ -718,7 +708,7 @@ def create_build_descr_data(
     if topdir:
         buildenv_file = os.path.join(topdir, f"_buildenv.{repo}.{arch}")
         if not os.path.isfile(buildenv_file):
-            buildenv_file = os.path.join(topdir, f"_buildenv")
+            buildenv_file = os.path.join(topdir, "_buildenv")
         if os.path.isfile(buildenv_file):
             print(f"Using local file: {os.path.basename(buildenv_file)}", file=sys.stderr)
             with open(buildenv_file, "rb") as f:
@@ -777,7 +767,9 @@ def main(apiurl, store, opts, argv):
         build_type = 'snapcraft'
     if os.path.basename(build_descr) == 'simpleimage':
         build_type = 'simpleimage'
-    if os.path.basename(build_descr) == 'Dockerfile':
+    if os.path.basename(build_descr) == 'Containerfile' or os.path.basename(build_descr).startswith('Containerfile.'):
+        build_type = 'docker'
+    if os.path.basename(build_descr) == 'Dockerfile' or os.path.basename(build_descr).startswith('Dockerfile.'):
         build_type = 'docker'
     if os.path.basename(build_descr) == 'fissile.yml':
         build_type = 'fissile'
@@ -950,7 +942,7 @@ def main(apiurl, store, opts, argv):
     if opts.noinit:
         buildargs.append('--noinit')
 
-    if not store.is_package:
+    if opts.local_package or not store.is_package:
         opts.skip_local_service_run = True
 
     # check for source services
@@ -1551,7 +1543,7 @@ def main(apiurl, store, opts, argv):
         cmd = [change_personality[bi.buildarch]] + cmd
 
     # record our settings for later builds
-    if store.is_package:
+    if not opts.local_package and store.is_package:
         store.last_buildroot = repo, arch, vm_type
 
     try:
