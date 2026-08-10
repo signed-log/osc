@@ -721,6 +721,9 @@ class XmlModel(BaseModel):
         """
         Instantiate model from a XML root.
         """
+        if cls.XML_TAG and cls.XML_TAG != root.tag:
+            print(cls.XML_TAG, root.tag)
+            raise ValueError(f"{cls.__name__}: Expected '{cls.XML_TAG}' element, found '{root.tag}'")
 
         # We need to make sure we parse all data
         # and that's why we remove processed elements and attributes and check that nothing remains.

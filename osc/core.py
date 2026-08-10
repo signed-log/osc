@@ -3918,6 +3918,8 @@ def copy_pac(
     them into the other by uploading them (client-side copy) --
     or by the server, in a single api call.
     """
+    from . import obs_api
+
     if (src_apiurl, src_project, src_package) == (dst_apiurl, dst_project, dst_package):
         # special cases when source and target can be the same:
         # * expanding sources
@@ -3925,10 +3927,15 @@ def copy_pac(
         if not any([expand, revision]):
             raise oscerr.OscValueError("Cannot copy package. Source and target are the same.")
 
+    if not src_package:
+        raise oscerr.OscValueError("Cannot copy a package without a name.")
+
     meta = new_meta = src_meta = None
     if not (src_apiurl == dst_apiurl and src_project == dst_project
             and src_package == dst_package):
         src_meta = show_package_meta(src_apiurl, src_project, src_package)
+        # initialize Package to validate the XML; we're not replacing the existing code with an object for now
+        obs_api.Package.from_string(b''.join(src_meta))
         dst_userid = conf.get_apiurl_usr(dst_apiurl)
         meta = replace_pkg_meta(src_meta, dst_package, dst_project, keep_maintainers,
                                 dst_userid, keep_develproject, keep_scmsync=(not client_side_copy))
