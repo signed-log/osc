@@ -3925,6 +3925,9 @@ def copy_pac(
         if not any([expand, revision]):
             raise oscerr.OscValueError("Cannot copy package. Source and target are the same.")
 
+    if not src_package:
+        raise oscerr.OscValueError("Cannot copy a package without a name.")
+
     meta = new_meta = src_meta = None
     if not (src_apiurl == dst_apiurl and src_project == dst_project
             and src_package == dst_package):
