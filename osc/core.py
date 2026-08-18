@@ -3810,11 +3810,12 @@ def branch_pkg(
             root = xml_fromstring(m)
 
     # error out if we're branching a scmsync package (we'd end up with garbage anyway)
-    if root is not None and root.find("scmsync") is not None:
+    scmsync_node = root.find("scmsync") if root is not None else None
+    if scmsync_node is not None and scmsync_node.text:
         msg = ("osc cannot branch packages with <scmsync>, i.e. externally "
               "managed sources. Often, the URL for cloning is also the URL "
               "for a collaborative web interface where you can fork (branch). "
-              "The scmsync URL was: " + root.find("scmsync").text)
+              "The scmsync URL was: " + scmsync_node.text)
         if devel_project:
             raise oscerr.PackageError(devel_project, devel_package, msg)
         raise oscerr.PackageError(src_project, src_package, msg)
