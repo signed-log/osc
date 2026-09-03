@@ -8270,6 +8270,8 @@ Please submit there instead, or use --nodevelproject to force direct submission.
                         help='work on deleted package')
     @cmdln.option('-M', '--meta', action='store_true', default=None,
                         help='checkout out meta data instead of sources')
+    @cmdln.option('-l', '--limit', metavar='N', type=int, default=None,
+                        help='limit the number of revisions returned by the server')
     def do_log(self, subcmd, opts, *args):
         """
         Shows the commit log of a package
@@ -8308,7 +8310,7 @@ Please submit there instead, or use --nodevelproject to force direct submission.
         if opts.xml:
             format = 'xml'
 
-        lines = get_commitlog(apiurl, project, package, rev, format, opts.meta, opts.deleted, rev_upper, patch=opts.patch)
+        lines = get_commitlog(apiurl, project, package, rev, format, opts.meta, opts.deleted, rev_upper, patch=opts.patch, limit=opts.limit)
         pipe_to_pager(lines, add_newlines=True)
 
     @cmdln.option('-v', '--verbose', action='store_true',

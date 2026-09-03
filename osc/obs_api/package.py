@@ -164,13 +164,22 @@ class Package(XmlModel):
         return Status.from_file(response, apiurl=apiurl)
 
     @classmethod
-    def get_revision_list(cls, apiurl: str, project: str, package: str, deleted: Optional[bool] = None, meta: Optional[bool] = None):
+    def get_revision_list(
+        cls,
+        apiurl: str,
+        project: str,
+        package: str,
+        deleted: Optional[bool] = None,
+        meta: Optional[bool] = None,
+        limit: Optional[int] = None,
+    ):
         from ..util.xml import xml_parse
 
         url_path = ["source", project, package, "_history"]
         url_query = {
             "meta": meta,
             "deleted": deleted,
+            "limit": limit,
         }
         response = cls.xml_request("GET", apiurl, url_path, url_query)
         root = xml_parse(response).getroot()
