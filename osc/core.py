@@ -4941,12 +4941,13 @@ def get_commitlog(
     deleted: Optional[bool] = None,
     revision_upper: Optional[str] = None,
     patch: Optional[bool] = None,
+    limit: Optional[int] = None,
 ):
     if package is None:
         package = "_project"
 
     from . import obs_api
-    revision_list = obs_api.Package.get_revision_list(apiurl, prj, package, deleted=deleted, meta=meta)
+    revision_list = obs_api.Package.get_revision_list(apiurl, prj, package, deleted=deleted, meta=meta, limit=limit)
 
     # TODO: consider moving the following block to Package.get_revision_list()
     # keep only entries matching the specified revision

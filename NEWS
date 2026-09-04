@@ -1,3 +1,6 @@
+- 1.27.4
+  - Command-line:
+    - Add 'osc log' --limit/-l option to limit the number of revisions returned by the server
 - 1.27.3
   - Command-line:
     - Fix 'osc lbl' to work with git based packages
